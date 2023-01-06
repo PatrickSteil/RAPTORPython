@@ -14,14 +14,14 @@ import json # for this purpose
 data = raptor.RAPTORData(PATH_TO_GTFS_DIR)
 data.readGTFS()
 data.saveToDisk(PATH_TO_SAVE_RAPTOR_OBJECTS)
-# data.loadFromDisk(PATH_TO_SAVE_RAPTOR_OBJECTS")
+# data.loadFromDisk(PATH_TO_SAVE_RAPTOR_OBJECTS") # if you want to laod the previously computed timetable information
 
 ## query
 data.run(source, target, depTime) # source, target are the stop_id's inside the GTFS/stops.txt file, depTime in seconds
 j = data.getAllJourneys()
 print(json.dumps(j, indent=4)) # to pretty print
 ```
-A result (here Erfurt, from 'Erfurt, Hugo-John-Straße' to 'Erfurt, Hauptbahnhof' departing at 10:00 could be:
+A result (here from "Erfurt, Hugo-John-Straße" to "Erfurt, Hauptbahnhof" departing at 10:00) could be:
 
 ```JSON
 {
@@ -29,14 +29,14 @@ A result (here Erfurt, from 'Erfurt, Hugo-John-Straße' to 'Erfurt, Hauptbahnhof
         {
             "DepartureTime": "10:23:00",
             "ArrivalTime": "10:25:00",
-            "FromStop": "Erfurt, Hugo-John-Stra\u00dfe",
-            "ToStop": "Erfurt, Grubenstra\u00dfe",
+            "FromStop": "Erfurt, Hugo-John-Straße",
+            "ToStop": "Erfurt, Grubenstraße",
             "RouteId": "2866_3"
         },
         {
             "DepartureTime": "10:25:00",
             "ArrivalTime": "10:39:00",
-            "FromStop": "Erfurt, Grubenstra\u00dfe",
+            "FromStop": "Erfurt, Grubenstraße",
             "ToStop": "Erfurt, Hauptbahnhof",
             "RouteId": "2843_0"
         }
@@ -45,21 +45,21 @@ A result (here Erfurt, from 'Erfurt, Hugo-John-Straße' to 'Erfurt, Hauptbahnhof
         {
             "DepartureTime": "10:23:00",
             "ArrivalTime": "10:25:00",
-            "FromStop": "Erfurt, Hugo-John-Stra\u00dfe",
-            "ToStop": "Erfurt, Grubenstra\u00dfe",
+            "FromStop": "Erfurt, Hugo-John-Straße",
+            "ToStop": "Erfurt, Grubenstraße",
             "RouteId": "2866_3"
         },
         {
             "DepartureTime": "10:25:00",
             "ArrivalTime": "10:27:00",
-            "FromStop": "Erfurt, Grubenstra\u00dfe",
-            "ToStop": "Erfurt, Salinenstra\u00dfe",
+            "FromStop": "Erfurt, Grubenstraße",
+            "ToStop": "Erfurt, Salinenstraße",
             "RouteId": "2843_0"
         },
         {
             "DepartureTime": "10:27:00",
             "ArrivalTime": "10:38:00",
-            "FromStop": "Erfurt, Salinenstra\u00dfe",
+            "FromStop": "Erfurt, Salinenstraße",
             "ToStop": "Erfurt, Hauptbahnhof",
             "RouteId": "2867_3"
         }
