@@ -67,3 +67,4 @@ A result (here from "Erfurt, Hugo-John-Straße" to "Erfurt, Hauptbahnhof" depart
 }
 
 ```
+Also, you can run range queries (aka rRAPTOR) using `data.run(source, target, earliestDepTime, latestDepTime)`.
