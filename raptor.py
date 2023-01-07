@@ -1,3 +1,5 @@
+#!/usr/local/bin/python3
+# -*- coding: utf-8 -*-
 import csv
 import bisect
 import pickle
@@ -20,6 +22,8 @@ def stringHHMMSSToSeconds(time):
 	return (int(h) * 60 + int(m)) * 60 + int(s)
 
 def secondsToHHMMSSString(sec):
+	if (sec == float("inf")):
+		return "inf"
 	return str(timedelta(seconds=sec))
 
 # advanced classes to look up things faster
@@ -106,6 +110,13 @@ class EarliestArrivalLabel(object):
 	def __str__(self):
 		return "ArrTime: " + secondsToHHMMSSString(self.arrTime) + ";ParentDepTime: " + secondsToHHMMSSString(self.parentDepTime) + ";Parent: " + str(self.parent) + ";UsesRoute: " + str(self.usesRoute) + ";RouteId: " + str(self.routeId)
 
+class DepartureLabel(object):
+	def __init__(self, depTime, stop):
+		super(DepartureLabel, self).__init__()
+		self.depTime = depTime
+		self.stop = stop
+		
+
 # Now the main file
 class RAPTORData(object):
 	def __init__(self, directoryName):
@@ -117,9 +128,11 @@ class RAPTORData(object):
 		self.source = 0
 		self.target = 0
 		self.depTime = 0
+		self.earliestDepTime = 0
+		self.latestDepTime = 0
 		self.stopsUpdatedByRoute = None
 		self.stopsUpdatedByTransfer = None
-		self.finished = False
+		self.stopsReached = None
 
 		## route contains routeId (from gtfs)
 		self.routes = []
@@ -143,6 +156,8 @@ class RAPTORData(object):
 		self.stops = []
 		self.stopNames = []
 		self.routesOperatingAtStops = []
+
+		self.collectedDepTimes = []
 
 		self.stopMap = {}
 		self.tripMap = {}
@@ -216,7 +231,7 @@ class RAPTORData(object):
 
 
 	def __readStops(self):
-		with open(self.directoryName + "/stops.txt", "r") as csvFile:
+		with open(self.directoryName + "/stops.txt", "r", encoding="utf-8") as csvFile:
 			reader = csv.reader(csvFile, skipinitialspace=True)
 			
 			stopIdIndex = -1
@@ -235,7 +250,7 @@ class RAPTORData(object):
 					currentIndex += 1
 
 	def __readTransfers(self):
-		with open(self.directoryName + "/transfers.txt", "r") as csvFile:
+		with open(self.directoryName + "/transfers.txt", "r", encoding="utf-8") as csvFile:
 			reader = csv.reader(csvFile, skipinitialspace=True)
 			
 			fromStopIdIndex = -1
@@ -258,7 +273,7 @@ class RAPTORData(object):
 		self.transfers.sort(key=lambda x: x.fromStopId)
 
 	def __readRoutes(self):
-		with open(self.directoryName + "/routes.txt", "r") as csvFile:
+		with open(self.directoryName + "/routes.txt", "r", encoding="utf-8") as csvFile:
 			reader = csv.reader(csvFile, skipinitialspace=True)
 			
 			routeIdIndex = -1
@@ -275,7 +290,7 @@ class RAPTORData(object):
 					currentIndex += 1
 
 	def __readTrips(self):
-		with open(self.directoryName + "/trips.txt", "r") as csvFile:
+		with open(self.directoryName + "/trips.txt", "r", encoding="utf-8") as csvFile:
 			reader = csv.reader(csvFile, skipinitialspace=True)
 
 			routeIdIndex = -1
@@ -292,7 +307,7 @@ class RAPTORData(object):
 		## we need that map to map trips with same stopsequence 
 		stopSequenceMap = {}
 
-		with open(self.directoryName + "/stop_times.txt", "r") as csvFile:
+		with open(self.directoryName + "/stop_times.txt", "r", encoding="utf-8") as csvFile:
 			reader = csv.reader(csvFile, skipinitialspace=True)
 			
 			tripIdIndex = -1
@@ -360,7 +375,7 @@ class RAPTORData(object):
 			self.firstTripOfRoute[routeId] = tripIndex
 			self.routes = newRouteIds[:]
 
-		with open(self.directoryName + "/stop_times.txt", "r") as csvFile:
+		with open(self.directoryName + "/stop_times.txt", "r", encoding="utf-8") as csvFile:
 			reader = csv.reader(csvFile, skipinitialspace=True)
 
 			self.stopEventsOfTrip = [[] for _ in range(currentTripIndex+1)]
@@ -412,8 +427,8 @@ class RAPTORData(object):
 	def clear(self):
 		self.earliestArrival = [float("inf") for _ in self.stops]
 		self.rounds = [[EarliestArrivalLabel() for _ in self.stops]]
-		self.resultJourney = []
 		self.stopsUpdated = IndexedSet(self.numberOfStops())
+		self.stopsReached = IndexedSet(self.numberOfStops())
 		self.routesServingUpdatedStops = IndexedHash(self.numberOfRoutes())
 
 	def startNewRound(self):
@@ -431,6 +446,7 @@ class RAPTORData(object):
 		for stop in stopsUpdatedElements:
 			for trans in self.transfers[self.firstTransferOfStop(stop):self.lastTransferOfStop(stop)]:
 				if (self.updateArrivalTime(trans.toStopId, self.currentRound()[stop].arrTime + trans.duration)):
+					self.stopsReached.insert(trans.toStopId)
 					self.currentRound()[trans.toStopId].parent = stop
 					self.currentRound()[trans.toStopId].usesRoute = False
 					self.currentRound()[trans.toStopId].parentDepTime = self.currentRound()[stop].arrTime
@@ -459,37 +475,36 @@ class RAPTORData(object):
 		self.stopsUpdated.insert(stopId)
 		return True
 
-	def initialize(self):
+	def initialize(self, rangeQuery=False):
 		self.clear()
-		self.updateArrivalTime(self.source, self.depTime)
+		if (rangeQuery):
+			self.updateArrivalTime(self.source, self.sourceDepTime)
+			self.currentRound()[self.source].parentDepTime = self.sourceDepTime
+		else:
+			self.updateArrivalTime(self.source, self.depTime)
+			self.currentRound()[self.source].parentDepTime = self.depTime
 		self.currentRound()[self.source].parent = self.source
 		self.currentRound()[self.source].usesRoute = False
-		self.currentRound()[self.source].parentDepTime = self.depTime
 		self.currentRound()[self.source].routeId = None
-		self.relaxTransfers()
 
 	def run(self, sourceGTFSId, targetGTFSId, depTime):
 		self.source = self.stopMap[sourceGTFSId]
 		self.target = self.stopMap[targetGTFSId]
 		self.depTime = depTime
-		self.finished = False
 		
 		self.initialize()
 		
 		k = 0
 		maxRounds = 16
-		while (k < maxRounds):
+		while (k < maxRounds and not self.stopsUpdated.isEmpty()):
+			self.relaxTransfers()
+
 			self.startNewRound()
 			# collect all routes
 			self.collectRoutesServingUpdatedStops()
 
 			# scan all route collected earlier
 			self.scanRoutes()
-			
-			if (self.stopsUpdated.isEmpty()):
-				return
-
-			self.relaxTransfers()
 			k += 1
 
 	def scanRoutes(self):
@@ -513,6 +528,7 @@ class RAPTORData(object):
 				stop = self.stopSequenceOfRoute[route][currentStopIndex]
 
 				if (self.updateArrivalTime(stop, self.stopEventsOfTrip[trip][currentStopIndex].arrTime)):
+					self.stopsReached.insert(stop)
 					self.currentRound()[stop].parent = self.stopSequenceOfRoute[route][parentIndex]
 					self.currentRound()[stop].usesRoute = True
 					self.currentRound()[stop].parentDepTime = self.stopEventsOfTrip[trip][parentIndex].depTime
@@ -542,8 +558,8 @@ class RAPTORData(object):
 		j = {
 			"DepartureTime": secondsToHHMMSSString(ea.parentDepTime),
 			"ArrivalTime": secondsToHHMMSSString(ea.arrTime),
-			"FromStop": self.stopNames[ea.parent],
-			"ToStop": self.stopNames[currentStop]
+			"FromStop": str(self.stopNames[ea.parent]),
+			"ToStop": str(self.stopNames[currentStop])
 		}
 		if (ea.usesRoute):
 			j["RouteId"] = self.routes[ea.routeId]
@@ -569,3 +585,84 @@ class RAPTORData(object):
 			journey.append(self.transformEAToJourney(ea, currentStop))
 			currentStop = ea.parent
 		return journey[::-1]
+
+	## range query
+
+	def findDurationOfTransfer(self, fromStopId, toStopId):
+		for transfer in self.transfers[self.firstTransferOfStop(fromStopId):self.lastTransferOfStop(toStopId)]:
+			if (transfer.toStopId == toStopId):
+				return transfer.duration
+		return float("inf")
+
+	def addDepartureLabel(self, stop, depTime):
+		self.currentRound()[stop].depTime = depTime
+		self.currentRound()[stop].parent = self.source
+		self.currentRound()[stop].usesRoute = False
+		self.currentRound()[stop].parentDepTime = self.sourceDepTime
+		self.currentRound()[stop].routeId = None
+
+	def run(self, sourceGTFSId, targetGTFSId, earliestDepTime, latestDepTime):
+		self.source = self.stopMap[sourceGTFSId]
+		self.target = self.stopMap[targetGTFSId]
+		self.earliestDepTime = earliestDepTime
+		self.latestDepTime = latestDepTime
+
+		self.sourceDepTime = 0
+		self.resultJourney = []
+
+		self.collectDepartureTimes()
+		
+		maxRounds = 16
+		i = 0
+		while (i < len(self.collectedDepTimes)):
+			self.sourceDepTime = self.collectedDepTimes[i].depTime
+			self.initialize(True)
+
+			self.stopsReached.clear()
+
+			transferTime = self.findDurationOfTransfer(self.source, self.collectedDepTimes[i].stop)
+			if (self.collectedDepTimes[i].stop == self.source):
+				transferTime = 0
+			self.addDepartureLabel(self.collectedDepTimes[i].stop, self.collectedDepTimes[i].depTime + transferTime)
+
+			while (i+1 < len(self.collectedDepTimes) and self.collectedDepTimes[i].depTime == self.collectedDepTimes[i+1].depTime):
+				transferTime = self.findDurationOfTransfer(self.source, self.collectedDepTimes[i].stop)
+				if (self.collectedDepTimes[i].stop == self.source):
+					transferTime = 0
+				self.addDepartureLabel(self.collectedDepTimes[i].stop, self.collectedDepTimes[i].depTime + transferTime)
+				i += 1
+			i += 1
+
+			k = 0
+			while (k < maxRounds and not self.stopsUpdated.isEmpty()):
+				self.relaxTransfers()
+
+				self.startNewRound()
+
+				# collect all routes
+				self.collectRoutesServingUpdatedStops()
+
+				# scan all route collected earlier
+				self.scanRoutes()
+				k += 1
+
+			if (self.stopsReached.contains(self.target)):
+				self.resultJourney.append(self.getAllJourneys())
+		return self.resultJourney
+			
+
+	def collectDepartureTimes(self):
+		self.collectedDepTimes = []
+
+		for route in range(self.numberOfRoutes()):
+			for trip in self.stopEventsOfTrip[self.getFirstTripOfRoute(route):self.getLastTripOfRoute(route)]:
+				for stopSeq, stop in enumerate(self.stopSequenceOfRoute[route]):
+					if (stopSeq + 1 == len(self.stopSequenceOfRoute[route])):
+						continue
+					if (trip[stopSeq].depTime < self.earliestDepTime or trip[stopSeq].depTime > self.latestDepTime):
+						continue
+					transferTime = self.findDurationOfTransfer(stop, self.source)
+					if (stop == self.source or transferTime < float("inf")):
+						# find all depTime in range [self.earliestDepTime, self.latestDepTime]
+						self.collectedDepTimes.append(DepartureLabel(trip[stopSeq].depTime, stop))
+		self.collectedDepTimes.sort(key=lambda x : x.depTime, reverse=True)
