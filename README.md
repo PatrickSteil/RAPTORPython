@@ -1,4 +1,4 @@
-# RAPTOR in Pythin
+# RAPTOR in Python
 RAPTIOR implemented in Python - reads timetable information from a GTFS directory.
 
 Implemented is the RAPTOR algorithm [https://www.microsoft.com/en-us/research/wp-content/uploads/2012/01/raptor_alenex.pdf], a route planning algorithm that calculates Pareto Optimal journeys in terms of arrival time and the number of transfers. RAPTOR can easily be extended to answer multicriteria problems. Range queries are also easy to calculate. RAPTOR works on the timetable and not on any graph. As a timetable, a GTFS directory (with all essential files) is read in and internally "suitably" stored.
