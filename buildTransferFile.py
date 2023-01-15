@@ -7,11 +7,13 @@ stop_ids = []
 
 avgMPerS = 1.3
 
+dataset = "data/s_re"
+
 def getWalkingDist(coordsA, coordsB):
 	return geopy.distance.geodesic(coordsA, coordsB).m
 
 
-with open("data/s_re/stops.txt", "r", encoding='utf-8-sig') as csvFile:
+with open(dataset + "/stops.txt", "r", encoding='utf-8-sig') as csvFile:
 	reader = csv.reader(csvFile, skipinitialspace=True)
 	stopIdIndex = -1
 	latIndex = -1
@@ -30,7 +32,7 @@ kd_tree = spatial.KDTree(coords)
 
 transfers = []
 
-with open("data/s_re/transfers.txt", "w", encoding='utf-8-sig') as csvFile:
+with open(dataset + "/transfers.txt", "w", encoding='utf-8-sig') as csvFile:
 	writer = csv.writer(csvFile, skipinitialspace=True)
 	writer.writerow(["from_stop_id", "to_stop_id", "transfer_type", "min_transfer_time"])
 
