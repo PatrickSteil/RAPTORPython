@@ -1,19 +1,21 @@
 from scipy import spatial
 import csv
 import geopy.distance
+import networkx as nx
+
+#ä# creates a transitive closed transfer file
 
 coords = []
 stop_ids = []
 
+PATH = "/Users/patricksteil/Documents/PythonTB/latest"
 avgMPerS = 1.3
-
-dataset = "data/s_re"
 
 def getWalkingDist(coordsA, coordsB):
 	return geopy.distance.geodesic(coordsA, coordsB).m
 
 
-with open(dataset + "/stops.txt", "r", encoding='utf-8-sig') as csvFile:
+with open(PATH + "/stops.txt", "r", encoding='utf-8-sig') as csvFile:
 	reader = csv.reader(csvFile, skipinitialspace=True)
 	stopIdIndex = -1
 	latIndex = -1
@@ -30,13 +32,21 @@ with open(dataset + "/stops.txt", "r", encoding='utf-8-sig') as csvFile:
 
 kd_tree = spatial.KDTree(coords)
 
-transfers = []
+graph = nx.DiGraph()
+graph.add_nodes_from(stop_ids)
 
-with open(dataset + "/transfers.txt", "w", encoding='utf-8-sig') as csvFile:
+for [a, b] in list(kd_tree.query_pairs(r=0.0015)):
+	graph.add_edge(a, b)
+	graph.add_edge(b, a)
+
+
+nx.transitive_closure(graph, None)
+	
+
+with open(PATH + "/transfers.txt", "w", encoding='utf-8-sig') as csvFile:
 	writer = csv.writer(csvFile, skipinitialspace=True)
 	writer.writerow(["from_stop_id", "to_stop_id", "transfer_type", "min_transfer_time"])
 
-	for [a, b] in list(kd_tree.query_pairs(r=0.02)):
+	for [a, b] in graph.edges:
 		time = int(getWalkingDist(coords[a], coords[b]) / avgMPerS)
-		writer.writerows([stop_ids[a], stop_ids[b], 2, time])
-		writer.writerows([stop_ids[b], stop_ids[a], 2, time])
+		writer.writerow([stop_ids[a], stop_ids[b], "2", time])
